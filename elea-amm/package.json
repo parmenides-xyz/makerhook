@@ -1,0 +1,29 @@
+{
+  "name": "elea-amm",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:math": "hardhat test test/FixedPoint96.test.js test/SphericalMath.test.js",
+    "test:fuzz": "hardhat test test/SphericalMath.fuzz.js",
+    "test:gas": "hardhat test test/GasBenchmark.test.js",
+    "test:all": "npm run test:math && npm run test:fuzz && npm run test:gas",
+    "coverage": "hardhat coverage",
+    "lint": "solhint 'contracts/**/*.sol'",
+    "deploy:testnet": "hardhat run scripts/deploy.js --network seitestnet",
+    "deploy:mainnet": "hardhat run scripts/deploy.js --network seimainnet",
+    "clean": "hardhat clean",
+    "node": "hardhat node"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@openzeppelin/contracts": "^5.4.0",
+    "dotenv": "^17.2.0",
+    "hardhat": "^2.26.0"
+  }
+}
