@@ -1,0 +1,151 @@
+[workspace]
+members = [
+    "examples/example-deploy/host",
+    "examples/uniswap/host",
+    "examples/uniswap/client",
+    "examples/multiplexer/host",
+    "examples/multiplexer/client",
+    "examples/events/host",
+    "examples/events/client",
+    "examples/optimism/host",
+    "examples/optimism/client",
+    "examples/verify-quorum/host",
+    "examples/verify-quorum/client",
+    "crates/client-executor",
+    "crates/host-executor",
+]
+exclude = []
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["yuwen01"]
+exclude = ["**/target"]
+version = "0.1.0"
+
+[workspace.dependencies]
+eyre = "0.6"
+tracing = { version = "0.1.40", default-features = false }
+tokio = { version = "1.21", default-features = false, features = [
+    "rt",
+    "rt-multi-thread",
+] }
+serde_json = "1.0.94"
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+reqwest = "0.12.15"
+url = "2.3"
+hex-literal = "0.4.1"
+bincode = "1.3.3"
+dotenv = "0.15.0"
+thiserror = "2.0.12"
+
+# workspace
+sp1-cc-client-executor = {path = "./crates/client-executor"}
+sp1-cc-host-executor = {path = "./crates/host-executor"}
+
+# sp1
+sp1-sdk = "5.0.0"
+sp1-zkvm = "5.0.0"
+sp1-build = "5.0.0"
+
+# rsp
+rsp-rpc-db = { git = "https://github.com/succinctlabs/rsp", rev = "881ba190e758e01e72399df462ac99864930ddb0" }
+rsp-witness-db = { git = "https://github.com/succinctlabs/rsp", rev = "881ba190e758e01e72399df462ac99864930ddb0" }
+rsp-primitives = { git = "https://github.com/succinctlabs/rsp", rev = "881ba190e758e01e72399df462ac99864930ddb0" }
+rsp-client-executor = { git = "https://github.com/succinctlabs/rsp", rev = "881ba190e758e01e72399df462ac99864930ddb0" }
+rsp-mpt = { git = "https://github.com/succinctlabs/rsp", rev = "881ba190e758e01e72399df462ac99864930ddb0" }
+
+# rsp-rpc-db = { path = "../rsp/crates/storage/rpc-db" }
+# rsp-witness-db = { path = "../rsp/crates/storage/witness-db" }
+# rsp-primitives = { path = "../rsp/crates/primitives"}
+# rsp-client-executor = {path = "../rsp/crates/executor/client"}
+# rsp-mpt = { path = "../rsp/crates/mpt"}
+
+# reth
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false, features = [
+    "alloy-compat",
+    "std",
+] }
+reth-codecs = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-optimism-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-optimism-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-optimism-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-optimism-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-evm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-revm = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false, features = [
+    "std",
+] }
+reth-evm-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false, features = [
+    "std",
+] }
+reth-storage-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false, features = [
+    "std",
+] }
+reth-trie = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-trie-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-chainspec = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-execution-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-execution-types = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-db = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-errors = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+reth-ethereum-consensus = { git = "https://github.com/paradigmxyz/reth", tag = "v1.3.10", default-features = false }
+
+# revm
+revm = { version = "22.0.1", features = [
+    "std",
+    "optional_balance_check"
+], default-features = false }
+revm-primitives = { version = "18.0.0", features = [
+    "std",
+], default-features = false }
+op-revm = { version = "3.0.2", default-features = false }
+
+# alloy
+alloy-primitives = "1.0"
+alloy-consensus = { version = "0.14.0", default-features = false }
+alloy-contract = { version = "0.14.0", default-features = false }
+alloy-eips = { version = "0.14.0", default-features = false }
+alloy-node-bindings = { version = "0.14.0", default-features = false }
+alloy-provider = { version = "0.14.0", default-features = false, features = [
+    "reqwest",
+] }
+alloy-rpc-types = { version = "0.14.0", default-features = false, features = [
+    "eth",
+] }
+alloy-rpc-types-eth = { version = "0.14.0", default-features = false }
+alloy-serde = { version = "0.14.0" }
+alloy-transport = { version = "0.14.0" }
+
+alloy-rlp = "0.3.10"
+alloy-trie = "0.8.1"
+alloy-sol-types = { version = "1.0" }
+alloy-sol-macro = { version = "1.0" }
+alloy = { version = "0.14.0" }
+
+alloy-evm = { version = "0.4.0", default-features = false }
+alloy-op-evm = { version = "0.4.0", default-features = false }
+
+sha2 = "0.10.8"
+beacon-api-client = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "ba43147eb71b07e21e156e2904549405f87bc9a6" }
+ethereum-consensus = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "ba43147eb71b07e21e156e2904549405f87bc9a6" }
+async-trait = "0.1.88"
+
+[workspace.lints]
+rust.missing_debug_implementations = "warn"
+rust.unreachable_pub = "warn"
+rust.unused_must_use = "deny"
+rust.rust_2018_idioms = { level = "deny", priority = -1 }
+rustdoc.all = "warn"
+
+[patch.crates-io]
+sha2-v0-10-8 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha2", tag = "patch-sha2-0.10.8-sp1-4.0.0" }
+sha3-v0-10-8 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", package = "sha3", tag = "patch-sha3-0.10.8-sp1-4.0.0" }
+crypto-bigint = { git = "https://github.com/sp1-patches/RustCrypto-bigint", tag = "patch-0.5.5-sp1-4.0.0" }
+tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", tag = "patch-2.0.2-sp1-4.0.0" }
+secp256k1  = { git = "https://github.com/sp1-patches/rust-secp256k1", tag = "patch-0.30.0-sp1-5.0.0" }
+
+# TODO: Remove once https://github.com/ralexstokes/ethereum-consensus/pull/419 is merged.
+[patch."https://github.com/ralexstokes/ethereum-consensus"]
+ethereum-consensus = { git = "https://github.com/leruaa/ethereum-consensus", branch = "electra-fixes" }
