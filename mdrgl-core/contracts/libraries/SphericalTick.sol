@@ -267,10 +267,6 @@ library SphericalTick {
             return (false, "Tick plane constant outside valid range");
         }
         
-        // Capital efficiency: LPs effectively have virtual reserves of x_min
-        // without needing to provide them. This is the key insight from the paper.
-        // The position is valid as long as it can provide liquidity within [x_min, x_max]
-        
         // Ensure resulting liquidity is positive
         uint128 newLiquidity = LiquidityMath.addDelta(currentLiquidity, liquidityDelta);
         if (newLiquidity == 0) {
