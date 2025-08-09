@@ -111,11 +111,12 @@ contract SphericalFactory is ISphericalFactory, SphericalPoolDeployer, NoDelegat
         ISphericalPool(pool).setFeeProtocol(feeProtocol);
     }
 
-    /// @inheritdoc ISphericalFactory
+    // Override parameters() to resolve inheritance conflict
+    // Just delegate to parent implementation
     function parameters()
         external
         view
-        override
+        override(ISphericalFactory, SphericalPoolDeployer)
         returns (
             address factory,
             address[] memory tokens,
@@ -124,13 +125,13 @@ contract SphericalFactory is ISphericalFactory, SphericalPoolDeployer, NoDelegat
             uint256 radiusQ96
         )
     {
-        Parameters memory params = parameters;
+        // Call the parent's implementation directly
         return (
-            params.factory,
-            params.tokens,
-            params.fee,
-            params.tickSpacing,
-            params.radiusQ96
+            _parameters.factory,
+            _parameters.tokens,
+            _parameters.fee,
+            _parameters.tickSpacing,
+            _parameters.radiusQ96
         );
     }
 

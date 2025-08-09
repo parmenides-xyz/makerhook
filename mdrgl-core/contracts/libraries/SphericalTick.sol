@@ -49,6 +49,9 @@ library SphericalTick {
         uint256 radiusQ96;         // The tick's sphere radius
         uint256 kQ96;              // Plane constant x̄ · v̄ = k
         uint256 kNormQ96;          // Normalized k value (k/r) for efficient comparison
+        // Alpha tracking for this tick
+        uint256 alphaCumulativeLastQ96;  // Last recorded cumulative alpha when tick was updated
+        uint32 timestampLast;            // Timestamp of last update
     }
 
     /// @notice Derives max liquidity per tick from given tick spacing
