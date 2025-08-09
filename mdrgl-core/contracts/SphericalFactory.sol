@@ -54,7 +54,7 @@ contract SphericalFactory is ISphericalFactory, SphericalPoolDeployer, NoDelegat
         uint24 fee,
         uint256 radiusQ96
     ) external override noDelegateCall returns (address pool) {
-        require(tokens.length >= 2 && tokens.length <= 8, 'INVALID_TOKEN_COUNT');
+        require(tokens.length >= 2, 'MIN_TOKENS');
         require(radiusQ96 > 0, 'INVALID_RADIUS');
         
         // Sort tokens
@@ -111,11 +111,12 @@ contract SphericalFactory is ISphericalFactory, SphericalPoolDeployer, NoDelegat
         ISphericalPool(pool).setFeeProtocol(feeProtocol);
     }
 
-    /// @inheritdoc ISphericalFactory
+    // Override parameters() to resolve inheritance conflict
+    // Just delegate to parent implementation
     function parameters()
         external
         view
-        override
+        override(ISphericalFactory, SphericalPoolDeployer)
         returns (
             address factory,
             address[] memory tokens,
@@ -124,13 +125,13 @@ contract SphericalFactory is ISphericalFactory, SphericalPoolDeployer, NoDelegat
             uint256 radiusQ96
         )
     {
-        Parameters memory params = parameters;
+        // Call the parent's implementation directly
         return (
-            params.factory,
-            params.tokens,
-            params.fee,
-            params.tickSpacing,
-            params.radiusQ96
+            _parameters.factory,
+            _parameters.tokens,
+            _parameters.fee,
+            _parameters.tickSpacing,
+            _parameters.radiusQ96
         );
     }
 
@@ -141,7 +142,7 @@ contract SphericalFactory is ISphericalFactory, SphericalPoolDeployer, NoDelegat
             sorted[i] = tokens[i];
         }
         
-        // Bubble sort for simplicity (pools have max 8 tokens)
+        // Bubble sort - consider gas costs for large token arrays
         for (uint256 i = 0; i < sorted.length - 1; i++) {
             for (uint256 j = i + 1; j < sorted.length; j++) {
                 if (sorted[i] > sorted[j]) {
