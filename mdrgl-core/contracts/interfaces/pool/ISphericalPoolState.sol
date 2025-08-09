@@ -23,27 +23,22 @@ interface ISphericalPoolState {
     /// @return The sum of squares in Q96
     function sumSquaresQ96() external view returns (uint256);
 
-    /// @notice The current projection α = x̄ · v̄ in Q96 format
-    /// @dev Represents the position on the equal-price vector
-    /// @return The projection value in Q96
-    function alphaQ96() external view returns (uint256);
-
     /// @notice The 0th storage slot of the pool
     /// @dev Contains global state that is frequently accessed
-    /// @return alphaQ96 The current projection α
-    /// @return observationIndex The index of the last oracle observation
-    /// @return observationCardinality The current maximum capacity of the oracle
-    /// @return observationCardinalityNext The next maximum capacity of the oracle
+    /// @return radiusInteriorQ96 Current consolidated radius from interior ticks
+    /// @return radiusBoundaryQ96 Current consolidated orthogonal radius from boundary ticks
+    /// @return kBoundaryQ96 Current consolidated k from boundary ticks
+    /// @return initialized Whether the pool is initialized
     /// @return feeProtocol The protocol fee for token swaps
     /// @return unlocked Whether the pool is currently locked to reentrancy
     function slot0()
         external
         view
         returns (
-            uint256 alphaQ96,
-            uint16 observationIndex,
-            uint16 observationCardinality,
-            uint16 observationCardinalityNext,
+            uint256 radiusInteriorQ96,
+            uint256 radiusBoundaryQ96,
+            uint256 kBoundaryQ96,
+            bool initialized,
             uint8 feeProtocol,
             bool unlocked
         );
