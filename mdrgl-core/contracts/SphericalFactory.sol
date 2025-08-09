@@ -54,7 +54,7 @@ contract SphericalFactory is ISphericalFactory, SphericalPoolDeployer, NoDelegat
         uint24 fee,
         uint256 radiusQ96
     ) external override noDelegateCall returns (address pool) {
-        require(tokens.length >= 2 && tokens.length <= 8, 'INVALID_TOKEN_COUNT');
+        require(tokens.length >= 2, 'MIN_TOKENS');
         require(radiusQ96 > 0, 'INVALID_RADIUS');
         
         // Sort tokens
@@ -141,7 +141,7 @@ contract SphericalFactory is ISphericalFactory, SphericalPoolDeployer, NoDelegat
             sorted[i] = tokens[i];
         }
         
-        // Bubble sort for simplicity (pools have max 8 tokens)
+        // Bubble sort - consider gas costs for large token arrays
         for (uint256 i = 0; i < sorted.length - 1; i++) {
             for (uint256 j = i + 1; j < sorted.length; j++) {
                 if (sorted[i] > sorted[j]) {

@@ -97,7 +97,7 @@ contract SphericalPool is ISphericalPool {
         (factory, tokens, fee, tickSpacing, radiusQ96) = ISphericalPoolDeployer(msg.sender).parameters();
         
         numAssets = tokens.length;
-        require(numAssets >= 2 && numAssets <= 8, 'INVALID_N');
+        require(numAssets >= 2, 'MIN_ASSETS');
         
         // Calculate sqrt(n) in Q96 format
         sqrtNumAssetsQ96 = FullMath.sqrt(numAssets * FixedPoint96.Q96 * FixedPoint96.Q96);
