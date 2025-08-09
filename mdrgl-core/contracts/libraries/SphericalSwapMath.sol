@@ -86,8 +86,7 @@ library SphericalSwapMath {
                 params,
                 newSumReservesQ96,
                 newSumSquaresQ96,
-                newReserveOut,
-                delta // TODO: Check if delta needed for derivative
+                newReserveOut
             );
 
             // Check convergence
@@ -213,8 +212,7 @@ library SphericalSwapMath {
             SwapParams memory params,
             uint256 newSumReservesQ96,
             uint256 newSumSquaresQ96,
-            uint256 newReserveOut,
-            uint256 /* delta */
+            uint256 newReserveOut
         ) private pure returns (int256 f, int256 fPrime) {
             uint256 projectionQ96;
             uint256 sqrtOrthogonal;
@@ -266,7 +264,7 @@ library SphericalSwapMath {
                 f = int256(projSq) + int256(orthDiffSq) - int256(radiusSq);
             }
 
-            // Calculate derivative - simplified for stack depth
+            // Calculate derivative
             fPrime = calculateDerivative(
                 projectionQ96,
                 orthogonalDiff,
