@@ -262,11 +262,20 @@ library SphericalMath {
             result = FixedPoint96.Q96;
             
             // Babylonian iterations on Q96 value
+            uint256 lastResult;
             for (uint256 i = 0; i < 10; i++) {
-                uint256 lastResult = result;
+                lastResult = result;
                 // result = (result + x/result) / 2
                 // To avoid overflow: result = result/2 + x/(2*result)
-                result = (result >> 1) + FullMath.mulDiv(x, FixedPoint96.Q96, result << 1);
+                uint256 newResult = (result >> 1) + FullMath.mulDiv(x, FixedPoint96.Q96, result << 1);
+                
+                // If we're oscillating, always pick the smaller value
+                // This ensures monotonicity across different x values
+                if (newResult > result && i > 0) {
+                    // We're going up after going down, stop with smaller value
+                    break;
+                }
+                result = newResult;
                 if (result == lastResult) break;
             }
             return result;
