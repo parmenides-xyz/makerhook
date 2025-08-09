@@ -109,4 +109,27 @@ interface ISphericalPoolState {
             uint160 secondsPerLiquidityCumulativeX128,
             bool initialized
         );
+    
+    /// @notice Returns the cumulative alpha and seconds per liquidity as of each timestamp secondsAgo
+    /// @param secondsAgos From how long ago each cumulative value should be returned
+    /// @return alphaCumulatives The cumulative alpha values  
+    /// @return secondsPerLiquidityCumulativeX128s The cumulative seconds per liquidity values
+    function observe(uint32[] calldata secondsAgos)
+        external
+        view
+        returns (uint256[] memory alphaCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s);
+    
+    /// @notice Returns a snapshot for single-tick positions
+    /// @param tick The tick to get the snapshot for
+    /// @return alphaCumulative The cumulative alpha value at the tick
+    /// @return secondsPerLiquidityInsideX128 The seconds per liquidity for the tick
+    /// @return secondsInside The seconds the tick has been active
+    function snapshotCumulativesInside(int24 tick)
+        external
+        view
+        returns (
+            uint256 alphaCumulative,
+            uint160 secondsPerLiquidityInsideX128,
+            uint32 secondsInside
+        );
 }
