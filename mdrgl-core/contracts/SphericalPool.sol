@@ -223,6 +223,25 @@ contract SphericalPool is ISphericalPool, NoDelegateCall {
             });
             
             SphericalTick.initializeGeometry(_tickInfo[tick], tick, radiusQ96, geometry);
+            
+            // Initialize alpha tracking for this tick
+            uint256 currentAlphaQ96 = 0;
+            for (uint256 i = 0; i < numAssets; i++) {
+                currentAlphaQ96 = currentAlphaQ96.add(currentReserves[i]);
+            }
+            currentAlphaQ96 = currentAlphaQ96.mul(FixedPoint96.Q96) / numAssets;
+            
+            (uint256 globalAlphaCumulative, ) = observations.observeSingle(
+                uint32(block.timestamp),
+                0,
+                currentAlphaQ96,
+                observationIndex,
+                liquidity,
+                observationCardinality
+            );
+            
+            _tickInfo[tick].alphaCumulativeLastQ96 = globalAlphaCumulative;
+            _tickInfo[tick].timestampLast = uint32(block.timestamp);
         }
         
         liquidity = uint128(uint256(liquidity).add(_liquidity));
@@ -776,8 +795,37 @@ contract SphericalPool is ISphericalPool, NoDelegateCall {
             return (0, 0, 0);
         }
         
-        // For single-tick positions, return the tick's own cumulative values
-        alphaCumulative = 0; // TODO: Track per-tick alpha if needed
+        // Calculate current global alpha (average of reserves in Q96)
+        uint256 sumReserves = 0;
+        for (uint256 i = 0; i < numAssets; i++) {
+            sumReserves = sumReserves.add(currentReserves[i]);
+        }
+        uint256 currentAlphaQ96 = sumReserves.mul(FixedPoint96.Q96) / numAssets;
+        
+        // Get current global cumulative from oracle
+        (uint256 globalAlphaCumulative, ) = observations.observeSingle(
+            uint32(block.timestamp),
+            0, // current time
+            currentAlphaQ96,
+            observationIndex,
+            liquidity,
+            observationCardinality
+        );
+        
+        // Calculate tick's contribution since last update
+        uint32 timeDelta = uint32(block.timestamp) - info.timestampLast;
+        if (timeDelta > 0 && info.liquidityGross > 0) {
+            // Tick's alpha contribution is proportional to its liquidity share
+            uint256 tickAlphaContribution = FullMath.mulDiv(
+                globalAlphaCumulative - info.alphaCumulativeLastQ96,
+                info.liquidityGross,
+                liquidity > 0 ? liquidity : 1
+            );
+            alphaCumulative = info.alphaCumulativeLastQ96 + tickAlphaContribution;
+        } else {
+            alphaCumulative = info.alphaCumulativeLastQ96;
+        }
+        
         secondsPerLiquidityInsideX128 = info.secondsPerLiquidityOutsideX128;
         secondsInside = uint32(block.timestamp) - info.secondsOutside;
         
