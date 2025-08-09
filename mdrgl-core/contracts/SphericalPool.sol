@@ -575,7 +575,7 @@ contract SphericalPool is ISphericalPool, NoDelegateCall {
         return activeTickCount;
     }
 
-    /// @notice Check if a tick is active
+    /// @notice Check if a tick is active in O(1) time
     function isTickActive(int24 tick) external view returns (bool) {
         return activeTicksMap[tick];
     }
