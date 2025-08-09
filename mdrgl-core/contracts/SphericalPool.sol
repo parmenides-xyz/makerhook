@@ -20,8 +20,9 @@ import './libraries/FullMath.sol';
 import './libraries/FixedPoint96.sol';
 import './libraries/FixedPoint128.sol';
 import './libraries/TransferHelper.sol';
+import './NoDelegateCall.sol';
 
-contract SphericalPool is ISphericalPool {
+contract SphericalPool is ISphericalPool, NoDelegateCall {
     using LowGasSafeMath for uint256;
     using LowGasSafeMath for int256;
     using SafeCast for uint256;
@@ -80,13 +81,19 @@ contract SphericalPool is ISphericalPool {
     /// @dev Position info by tick index (single owner per tick)
     mapping(int24 => SphericalPosition.Info) public positions;
 
-    /// @dev Active tick indices
-    int24[] public activeTicks;
+    /// @dev Mapping to track if a tick is active
+    mapping(int24 => bool) public activeTicksMap;
+    
+    /// @dev Linked list of active ticks for iteration
+    mapping(int24 => int24) public nextActiveTick;
+    int24 public firstActiveTick = type(int24).max; // Sentinel value for empty list
+    int24 public lastActiveTick;
+    uint256 public activeTickCount;
 
     /// @dev Accumulated protocol fees per token
     uint256[] public protocolFees;
 
-    /// @dev Oracle observations for tracking alpha over time
+    /// @notice Oracle observations for tracking alpha over time
     SphericalOracle.Observation[65535] public override observations;
     
     /// @dev Current observation state
@@ -128,7 +135,7 @@ contract SphericalPool is ISphericalPool {
         protocolFees = new uint256[](_numAssets);
     }
 
-    /// @notice Initialize the pool with initial reserve amounts
+    /// @inheritdoc ISphericalPoolActions
     function initialize(uint256[] calldata initialReserves) external override {
         require(!slot0.initialized, 'AI');
         require(initialReserves.length == numAssets, 'INVALID_LENGTH');
@@ -169,7 +176,7 @@ contract SphericalPool is ISphericalPool {
         emit Initialize(initialReserves, alphaQ96);
     }
 
-    /// @notice Mint liquidity at a specific tick
+    /// @inheritdoc ISphericalPoolActions
     function mint(
         int24 tick,
         uint128 _liquidity,
@@ -179,7 +186,6 @@ contract SphericalPool is ISphericalPool {
         require(tick >= 0 && tick <= SphericalTickMath.MAX_TICK, 'TI');
         
         SphericalPosition.Info storage position = positions[tick];
-        SphericalTick.Info storage tickData = _tickInfo[tick];
         
         // Ensure single owner per tick
         if (position.owner == address(0)) {
@@ -240,7 +246,7 @@ contract SphericalPool is ISphericalPool {
         emit Mint(msg.sender, tick, _liquidity, amounts);
     }
 
-    /// @notice Burn liquidity from a specific tick
+    /// @inheritdoc ISphericalPoolActions
     function burn(
         int24 tick,
         uint128 _liquidity
@@ -292,7 +298,7 @@ contract SphericalPool is ISphericalPool {
         emit Burn(msg.sender, tick, _liquidity, amounts);
     }
 
-    /// @notice Collect fees owed to a position
+    /// @inheritdoc ISphericalPoolActions
     function collect(
         int24 tick,
         address recipient,
@@ -323,7 +329,7 @@ contract SphericalPool is ISphericalPool {
         emit Collect(msg.sender, recipient, tick, amounts);
     }
 
-    /// @notice Execute a swap between two tokens
+    /// @inheritdoc ISphericalPoolActions
     function swap(
         address recipient,
         uint256 tokenIndexIn,
@@ -428,7 +434,7 @@ contract SphericalPool is ISphericalPool {
         );
     }
 
-    /// @notice Execute a flash loan
+    /// @inheritdoc ISphericalPoolActions
     function flash(
         address recipient,
         uint256[] calldata amounts,
@@ -480,7 +486,7 @@ contract SphericalPool is ISphericalPool {
         emit Flash(msg.sender, recipient, amounts, fees);
     }
 
-    /// @notice Set the protocol fee
+    /// @inheritdoc ISphericalPoolOwnerActions
     function setFeeProtocol(uint8 _feeProtocol) external override onlyFactoryOwner {
         require(_feeProtocol == 0 || (_feeProtocol >= 4 && _feeProtocol <= 10), 'FP');
         uint8 oldFeeProtocol = slot0.feeProtocol;
@@ -488,7 +494,7 @@ contract SphericalPool is ISphericalPool {
         emit SetFeeProtocol(oldFeeProtocol, _feeProtocol);
     }
 
-    /// @notice Collect protocol fees
+    /// @inheritdoc ISphericalPoolOwnerActions
     function collectProtocol(
         address recipient,
         uint128[] calldata amountRequested
@@ -511,71 +517,122 @@ contract SphericalPool is ISphericalPool {
         emit CollectProtocol(msg.sender, recipient, amounts);
     }
 
-    /// @dev Add a tick to the active ticks array
+    /// @dev Add a tick to the active ticks linked list
     function _addActiveTick(int24 tick) private {
-        activeTicks.push(tick);
+        require(!activeTicksMap[tick], 'TICK_ALREADY_ACTIVE');
+        
+        activeTicksMap[tick] = true;
+        activeTickCount++;
+        
+        if (firstActiveTick == type(int24).max) {
+            // First tick being added
+            firstActiveTick = tick;
+            lastActiveTick = tick;
+            nextActiveTick[tick] = type(int24).max; // Sentinel for end of list
+        } else {
+            // Add to end of list
+            nextActiveTick[lastActiveTick] = tick;
+            nextActiveTick[tick] = type(int24).max;
+            lastActiveTick = tick;
+        }
     }
 
-    /// @dev Remove a tick from the active ticks array
+    /// @dev Remove a tick from the active ticks linked list
     function _removeActiveTick(int24 tick) private {
-        for (uint256 i = 0; i < activeTicks.length; i++) {
-            if (activeTicks[i] == tick) {
-                activeTicks[i] = activeTicks[activeTicks.length - 1];
-                activeTicks.pop();
-                break;
+        require(activeTicksMap[tick], 'TICK_NOT_ACTIVE');
+        
+        activeTicksMap[tick] = false;
+        activeTickCount--;
+        
+        if (firstActiveTick == tick) {
+            // Removing first element
+            firstActiveTick = nextActiveTick[tick];
+            if (firstActiveTick == type(int24).max) {
+                // List is now empty
+                lastActiveTick = 0;
+            }
+        } else {
+            // Find previous tick
+            int24 current = firstActiveTick;
+            while (nextActiveTick[current] != tick) {
+                current = nextActiveTick[current];
+                require(current != type(int24).max, 'TICK_NOT_FOUND');
+            }
+            
+            // Remove from list
+            nextActiveTick[current] = nextActiveTick[tick];
+            
+            if (lastActiveTick == tick) {
+                lastActiveTick = current;
             }
         }
+        
+        delete nextActiveTick[tick];
     }
 
     /// @notice Get the number of active ticks
     function getActiveTickCount() external view returns (uint256) {
-        return activeTicks.length;
+        return activeTickCount;
     }
 
-    /// @notice Get an active tick by index
-    function getActiveTick(uint256 index) external view returns (int24) {
-        require(index < activeTicks.length, 'INDEX');
-        return activeTicks[index];
+    /// @notice Check if a tick is active
+    function isTickActive(int24 tick) external view returns (bool) {
+        return activeTicksMap[tick];
     }
 
-    /// @notice Get tokens owed to a position
+    /// @inheritdoc ISphericalPoolState
     function positionTokensOwed(int24 tick) external view override returns (uint128[] memory) {
         return positions[tick].tokensOwed;
     }
 
-    /// @notice Get a specific token address
+    /// @inheritdoc ISphericalPoolImmutables
     function getToken(uint256 index) external view override returns (address) {
         require(index < numAssets, 'INDEX');
         return _tokens[index];
     }
 
-    /// @notice Get all token addresses
+    /// @inheritdoc ISphericalPoolImmutables
     function tokens() external view override returns (address[] memory) {
         return _tokens;
     }
 
-    /// @notice Get current reserves for all tokens
+    /// @inheritdoc ISphericalPoolState
     function getReserves() external view override returns (uint256[] memory) {
         return currentReserves;
     }
 
-    /// @notice Get current reserve for a specific token
+    /// @inheritdoc ISphericalPoolState
     function getReserve(uint256 tokenIndex) external view override returns (uint256) {
         require(tokenIndex < numAssets, 'INDEX');
         return currentReserves[tokenIndex];
     }
 
-    /// @notice Get fee growth global for all tokens
+    /// @inheritdoc ISphericalPoolState
     function feeGrowthGlobalX128() external view override returns (uint256[] memory) {
         return _feeGrowthGlobalX128;
     }
 
-    /// @notice Get all active tick indices
+    /// @inheritdoc ISphericalPoolState
     function getActiveTicks() external view override returns (int24[] memory) {
-        return activeTicks;
+        int24[] memory ticks = new int24[](activeTickCount);
+        
+        if (activeTickCount == 0) {
+            return ticks;
+        }
+        
+        int24 current = firstActiveTick;
+        uint256 index = 0;
+        
+        while (current != type(int24).max && index < activeTickCount) {
+            ticks[index] = current;
+            current = nextActiveTick[current];
+            index++;
+        }
+        
+        return ticks;
     }
 
-    /// @notice Get sum of reserves in Q96 format
+    /// @inheritdoc ISphericalPoolState
     function sumReservesQ96() external view override returns (uint256) {
         uint256 sum = 0;
         for (uint256 i = 0; i < numAssets; i++) {
@@ -584,7 +641,7 @@ contract SphericalPool is ISphericalPool {
         return sum.mul(FixedPoint96.Q96) / numAssets;
     }
 
-    /// @notice Get sum of squared reserves in Q96 format
+    /// @inheritdoc ISphericalPoolState
     function sumSquaresQ96() external view override returns (uint256) {
         uint256 sumSquares = 0;
         for (uint256 i = 0; i < numAssets; i++) {
@@ -598,7 +655,7 @@ contract SphericalPool is ISphericalPool {
         return sumSquares;
     }
 
-    /// @notice Get consolidated tick parameters
+    /// @inheritdoc ISphericalPoolState
     function consolidatedTickParams()
         external
         view
@@ -618,7 +675,7 @@ contract SphericalPool is ISphericalPool {
 
     // observations() getter is auto-generated from public state variable
 
-    /// @notice Get information about a specific tick
+    /// @inheritdoc ISphericalPoolState
     function tickInfo(int24 tick)
         external
         view
@@ -640,7 +697,7 @@ contract SphericalPool is ISphericalPool {
         );
     }
 
-    /// @notice Increase the maximum number of price observations
+    /// @inheritdoc ISphericalPoolActions
     function increaseObservationCardinalityNext(uint16 _observationCardinalityNext) external override lock {
         uint16 observationCardinalityNextOld = observationCardinalityNext;
         uint16 observationCardinalityNextNew = observations.grow(
@@ -652,29 +709,93 @@ contract SphericalPool is ISphericalPool {
             emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
         }
     }
+    
+    /// @inheritdoc ISphericalPoolState
+    /// @param secondsAgos From how long ago each cumulative value should be returned
+    /// @return alphaCumulatives The cumulative alpha values
+    /// @return secondsPerLiquidityCumulativeX128s The cumulative seconds per liquidity values
+    function observe(uint32[] calldata secondsAgos)
+        external
+        view
+        override
+        returns (uint256[] memory alphaCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s)
+    {
+        // Calculate current alpha (projection onto equal-price vector)
+        uint256 alphaQ96 = 0;
+        for (uint256 i = 0; i < numAssets; i++) {
+            alphaQ96 = alphaQ96.add(currentReserves[i]);
+        }
+        alphaQ96 = alphaQ96.mul(FixedPoint96.Q96) / numAssets;
+        
+        return
+            observations.observe(
+                uint32(block.timestamp),
+                secondsAgos,
+                alphaQ96,
+                observationIndex,
+                liquidity,
+                observationCardinality
+            );
+    }
+    
+    /// @inheritdoc ISphericalPoolState
+    /// @dev Since Orbital uses single-tick positions, this returns values for a specific tick
+    /// @param tick The tick to get the snapshot for
+    /// @return alphaCumulative The cumulative alpha value at the tick
+    /// @return secondsPerLiquidityInsideX128 The seconds per liquidity for the tick
+    /// @return secondsInside The seconds the tick has been active
+    function snapshotCumulativesInside(int24 tick)
+        external
+        view
+        override
+        returns (
+            uint256 alphaCumulative,
+            uint160 secondsPerLiquidityInsideX128,
+            uint32 secondsInside
+        )
+    {
+        SphericalTick.Info storage info = _tickInfo[tick];
+        
+        if (!activeTicksMap[tick]) {
+            // Tick is not active
+            return (0, 0, 0);
+        }
+        
+        // For single-tick positions, return the tick's own cumulative values
+        alphaCumulative = 0; // TODO: Track per-tick alpha if needed
+        secondsPerLiquidityInsideX128 = info.secondsPerLiquidityOutsideX128;
+        secondsInside = uint32(block.timestamp) - info.secondsOutside;
+        
+        return (alphaCumulative, secondsPerLiquidityInsideX128, secondsInside);
+    }
 
-    /// @notice Update the consolidated tick parameters
+    /// @inheritdoc ISphericalPoolActions
     function updateConsolidatedTickParams() external override {
         uint256 newRadiusInteriorQ96 = 0;
         uint256 newRadiusBoundaryQ96 = 0;
         uint256 newKBoundaryQ96 = 0;
         
-        // Recalculate from all active ticks
-        for (uint256 i = 0; i < activeTicks.length; i++) {
-            int24 tick = activeTicks[i];
-            SphericalTick.Info storage info = _tickInfo[tick];
+        // Recalculate from all active ticks using linked list
+        if (activeTickCount > 0) {
+            int24 current = firstActiveTick;
             
-            if (info.isAtBoundary) {
-                newKBoundaryQ96 = newKBoundaryQ96.add(info.kQ96);
-                // Calculate orthogonal radius component for boundary ticks
-                uint256 orthogonalRadius = SphericalTickMath.getOrthogonalRadius(
-                    info.kQ96,
-                    radiusQ96,
-                    sqrtNumAssetsQ96
-                );
-                newRadiusBoundaryQ96 = newRadiusBoundaryQ96.add(orthogonalRadius);
-            } else {
-                newRadiusInteriorQ96 = newRadiusInteriorQ96.add(info.radiusQ96);
+            while (current != type(int24).max) {
+                SphericalTick.Info storage info = _tickInfo[current];
+                
+                if (info.isAtBoundary) {
+                    newKBoundaryQ96 = newKBoundaryQ96.add(info.kQ96);
+                    // Calculate orthogonal radius component for boundary ticks
+                    uint256 orthogonalRadius = SphericalTickMath.getOrthogonalRadius(
+                        info.kQ96,
+                        radiusQ96,
+                        sqrtNumAssetsQ96
+                    );
+                    newRadiusBoundaryQ96 = newRadiusBoundaryQ96.add(orthogonalRadius);
+                } else {
+                    newRadiusInteriorQ96 = newRadiusInteriorQ96.add(info.radiusQ96);
+                }
+                
+                current = nextActiveTick[current];
             }
         }
         
