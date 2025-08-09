@@ -173,6 +173,10 @@ contract SphericalPool is ISphericalPool, NoDelegateCall {
         }
         alphaQ96 = alphaQ96.mul(FixedPoint96.Q96) / numAssets;
         
+        // Initialize oracle
+        (observationCardinality, observationCardinalityNext) = observations.initialize(uint32(block.timestamp));
+        observationIndex = 0;
+        
         emit Initialize(initialReserves, alphaQ96);
     }
 
@@ -422,6 +426,17 @@ contract SphericalPool is ISphericalPool, NoDelegateCall {
         for (uint256 i = 0; i < numAssets; i++) {
             alphaQ96 = alphaQ96.add(currentReserves[i]);
         }
+        alphaQ96 = alphaQ96.mul(FixedPoint96.Q96) / numAssets;
+        
+        // Write oracle observation
+        (observationIndex, observationCardinality) = observations.write(
+            observationIndex,
+            uint32(block.timestamp),
+            alphaQ96,
+            liquidity,
+            observationCardinality,
+            observationCardinalityNext
+        );
         
         emit Swap(
             msg.sender,
@@ -430,7 +445,7 @@ contract SphericalPool is ISphericalPool, NoDelegateCall {
             tokenIndexOut,
             amountIn,
             amountOut,
-            alphaQ96.mul(FixedPoint96.Q96) / numAssets
+            alphaQ96
         );
     }
 
