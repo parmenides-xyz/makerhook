@@ -1,0 +1,44 @@
+# Echidna configuration for Spherical AMM testing
+format: 'text'
+checkAsserts: true
+coverage: false
+
+# Test parameters
+testLimit: 50000        # Number of test sequences to run
+seqLen: 100            # Transactions per test sequence
+shrinkLimit: 5000      # Effort spent shrinking failing sequences
+
+# Gas settings
+propMaxGas: 8000030
+testMaxGas: 8000030
+maxGasprice: 100000000000
+
+# Corpus settings (for saving interesting test cases)
+corpusDir: "echidna-corpus"
+
+# Dictionary frequency (use internal dictionary vs random)
+dictFreq: 0.40
+
+# Time settings
+maxTimeDelay: 604800   # Max time between txs (1 week)
+maxBlockDelay: 60480   # Max blocks between txs
+
+# Filtering
+filterFunctions: []
+filterBlacklist: true
+
+# Value settings
+maxValue: 0  # Don't send ETH to functions
+
+# Deployment settings
+balanceAddr: 0xffffffff
+balanceContract: 0
+
+# Optimization flags
+quiet: false
+stopOnFail: false      # Continue testing even after failures
+estimateGas: false     # Don't estimate gas costs
+benchmarkMode: false   # Not in benchmark mode
+
+# Seed for reproducibility (uncomment to set)
+# seed: 42

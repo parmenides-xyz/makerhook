@@ -154,14 +154,20 @@ library SphericalMath {
     ) internal pure returns (uint256 ratioQ96) {
         require(reserveI < radiusQ96, "Reserve I exceeds radius");
         require(reserveJ < radiusQ96, "Reserve J exceeds radius");
+        require(radiusQ96 > 0, "Invalid radius");
+        
+        // Ensure reserves are reasonable relative to radius
+        require(reserveI <= radiusQ96 * 99 / 100, "Reserve I too close to radius");
+        require(reserveJ <= radiusQ96 * 99 / 100, "Reserve J too close to radius");
 
         // Calculate (r - xⱼ)
         uint256 distanceJ = radiusQ96 - reserveJ;
         // Calculate (r - xᵢ)
         uint256 distanceI = radiusQ96 - reserveI;
 
-        // Prevent division by zero
-        require(distanceI > 0, "Invalid distance I");
+        // Prevent division by zero and ensure meaningful distances
+        require(distanceI > radiusQ96 / 10000, "Distance I too small");
+        require(distanceJ > 0, "Distance J too small");
 
         // Price ratio = (r - xⱼ)/(r - xᵢ)
         ratioQ96 = FullMath.mulDiv(distanceJ, FixedPoint96.Q96, distanceI);
@@ -213,15 +219,58 @@ library SphericalMath {
     }
 
     /// @notice Helper that computes the square root of a Q96 number
-    /// @dev Uses Babylonian method for precision
+    /// @dev Returns sqrt(x) in Q96 format where x is in Q96 format
     /// @param x The Q96 number to take the square root of
     /// @return result The square root in Q96 format
     function sqrt(uint256 x) internal pure returns (uint256 result) {
         if (x == 0) return 0;
         
-        // For Q96 numbers: sqrt(x * 2^96) = sqrt(x) * 2^48
-        // First scale down by 2^96, then take sqrt, then scale up by 2^48
+        // For very small Q96 values (less than 2^96), handle specially
+        // x in Q96 format represents actual_value * 2^96
+        // sqrt(x) gives us sqrt(actual_value * 2^96) = sqrt(actual_value) * 2^48
+        // To get Q96 output, we scale by another 2^48
+        if (x < FixedPoint96.Q96) {
+            if (x == 0) return 0;
+            
+            // Use babylonian method directly on x
+            result = x;
+            if (result > 1) {
+                result = (result + 1) / 2;
+            }
+            
+            // Iterations - continue until convergence
+            uint256 lastResult;
+            do {
+                lastResult = result;
+                result = (result + x / result) / 2;
+            } while (result < lastResult);
+            
+            // result is now sqrt(x) which is in Q48 scale
+            // Scale up by 2^48 to get Q96 format
+            return result << 48;
+        }
+        
+        // For normal Q96 values: sqrt(x * 2^96) = sqrt(x) * 2^48
+        // We need sqrt(x/2^96) * 2^96 = sqrt(x) * 2^48
+        // Use Babylonian method with better precision
         uint256 xScaled = x >> 96; // Scale down to raw number
+        
+        // If x is very close to Q96, use higher precision
+        if (x < (FixedPoint96.Q96 * 2)) {
+            // For values close to Q96, use Babylonian directly
+            // Initial guess: slightly more than Q96
+            result = FixedPoint96.Q96;
+            
+            // Babylonian iterations on Q96 value
+            for (uint256 i = 0; i < 10; i++) {
+                uint256 lastResult = result;
+                // result = (result + x/result) / 2
+                // To avoid overflow: result = result/2 + x/(2*result)
+                result = (result >> 1) + FullMath.mulDiv(x, FixedPoint96.Q96, result << 1);
+                if (result == lastResult) break;
+            }
+            return result;
+        }
         
         // Initial guess (using bit length)
         result = xScaled;
@@ -265,7 +314,7 @@ library SphericalMath {
             result = roundedDownResult;
         }
         
-        // Scale back up by 2^48 to get Q96 result
-        return result << 48;
+        // Scale back up by 2^96 to get Q96 result
+        return result << 96;
     }
 }

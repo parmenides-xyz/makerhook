@@ -173,7 +173,14 @@ library SphericalTick {
     /// @notice Clears tick data
     /// @param self The mapping containing all initialized tick information for initialized ticks
     /// @param tick The tick that will be cleared
-    function clear(mapping(int24 => Info) storage self, int24 tick) internal {
+    /// @param numAssets Number of assets to clear fee growth for
+    function clear(mapping(int24 => Info) storage self, int24 tick, uint256 numAssets) internal {
+        Info storage info = self[tick];
+        // Clear fee growth for each asset (mappings need explicit clearing)
+        for (uint256 i = 0; i < numAssets; i++) {
+            delete info.feeGrowthOutsideX128[i];
+        }
+        // Delete the rest of the struct
         delete self[tick];
     }
 

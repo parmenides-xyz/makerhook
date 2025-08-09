@@ -15,3 +15,10 @@ artifacts
 
 # OS
 .DS_Store
+
+# Echidna test artifacts
+echidna-corpus/
+crytic-export/
+
+# Temporary test files  
+test_*.js

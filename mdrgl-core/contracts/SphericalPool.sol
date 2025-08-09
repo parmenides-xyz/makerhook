@@ -297,7 +297,7 @@ contract SphericalPool is ISphericalPool, NoDelegateCall {
         
         if (flipped) {
             _removeActiveTick(tick);
-            _tickInfo.clear(tick);
+            _tickInfo.clear(tick, numAssets);
         }
         
         liquidity = uint128(uint256(liquidity).sub(_liquidity));
