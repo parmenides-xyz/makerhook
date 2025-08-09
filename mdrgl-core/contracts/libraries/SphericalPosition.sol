@@ -83,12 +83,10 @@ library SphericalPosition {
 
     /// @notice Collects accumulated fees for a position
     /// @param self The position to collect from
-    /// @param recipient The address to send fees to
     /// @param amountRequested Amount requested for each token (type(uint128).max for all)
     /// @return amountCollected Actual amounts collected for each token
     function collect(
         Info storage self,
-        address recipient,
         uint128[] memory amountRequested
     ) internal returns (uint128[] memory amountCollected) {
         require(self.owner != address(0), 'PU'); // Position uninitialized
