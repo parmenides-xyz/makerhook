@@ -517,7 +517,7 @@ contract SphericalPool is ISphericalPool, NoDelegateCall {
         emit CollectProtocol(msg.sender, recipient, amounts);
     }
 
-    /// @dev Add a tick to the active ticks linked list
+    /// @dev Add a tick to the active ticks linked list for O(1) insertion
     function _addActiveTick(int24 tick) private {
         require(!activeTicksMap[tick], 'TICK_ALREADY_ACTIVE');
         
