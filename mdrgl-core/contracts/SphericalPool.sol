@@ -537,7 +537,7 @@ contract SphericalPool is ISphericalPool, NoDelegateCall {
         }
     }
 
-    /// @dev Remove a tick from the active ticks linked list
+    /// @dev Remove a tick from the active ticks linked list with O(n) search
     function _removeActiveTick(int24 tick) private {
         require(activeTicksMap[tick], 'TICK_NOT_ACTIVE');
         
