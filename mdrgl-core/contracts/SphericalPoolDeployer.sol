@@ -13,8 +13,31 @@ contract SphericalPoolDeployer is ISphericalPoolDeployer {
         uint256 radiusQ96;
     }
 
+    /// @dev Temporary storage for deployment parameters
+    Parameters internal _parameters;
+
     /// @inheritdoc ISphericalPoolDeployer
-    Parameters public override parameters;
+    function parameters()
+        external
+        view
+        virtual
+        override
+        returns (
+            address factory,
+            address[] memory tokens,
+            uint24 fee,
+            int24 tickSpacing,
+            uint256 radiusQ96
+        )
+    {
+        return (
+            _parameters.factory,
+            _parameters.tokens,
+            _parameters.fee,
+            _parameters.tickSpacing,
+            _parameters.radiusQ96
+        );
+    }
 
     /// @dev Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
     /// clearing it after deploying the pool.
@@ -30,7 +53,7 @@ contract SphericalPoolDeployer is ISphericalPoolDeployer {
         int24 tickSpacing,
         uint256 radiusQ96
     ) internal returns (address pool) {
-        parameters = Parameters({
+        _parameters = Parameters({
             factory: factory,
             tokens: tokens,
             fee: fee,
@@ -41,6 +64,6 @@ contract SphericalPoolDeployer is ISphericalPoolDeployer {
         // Create deterministic salt from tokens and fee
         bytes32 salt = keccak256(abi.encode(tokens, fee));
         pool = address(new SphericalPool{salt: salt}());
-        delete parameters;
+        delete _parameters;
     }
 }
