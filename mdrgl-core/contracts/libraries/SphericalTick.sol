@@ -264,11 +264,6 @@ library SphericalTick {
             geometry.sqrtNQ96
         );
         
-        // Validate geometric constraints
-        if (xMinQ96 == 0) {
-            return (false, "Invalid tick: x_min is zero");
-        }
-        
         // Validate k is within valid range
         uint256 kMinQ96 = SphericalTickMath.getKMin(geometry.radiusQ96, geometry.sqrtNQ96);
         uint256 kMaxQ96 = SphericalTickMath.getKMax(geometry.radiusQ96, geometry.n, geometry.sqrtNQ96);
