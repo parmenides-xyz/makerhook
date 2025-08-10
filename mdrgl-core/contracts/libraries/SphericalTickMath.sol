@@ -163,8 +163,11 @@ library SphericalTickMath {
         uint256 sqrtDiscriminant = SphericalMath.sqrt(discriminant);
         
         // Calculate x_min = (k√n - √discriminant)/n
-        require(kSqrtN >= sqrtDiscriminant, "Invalid x_min");
-        xMinQ96 = (kSqrtN - sqrtDiscriminant) / n;
+        if (sqrtDiscriminant > kSqrtN) {
+            xMinQ96 = 0;
+        } else {
+            xMinQ96 = (kSqrtN - sqrtDiscriminant) / n;
+        }
         
         // Calculate x_max = min(r, (k√n + √discriminant)/n)
         uint256 xMaxCandidate = (kSqrtN + sqrtDiscriminant) / n;
