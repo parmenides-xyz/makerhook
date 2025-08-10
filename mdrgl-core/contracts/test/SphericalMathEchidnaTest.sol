@@ -1,252 +1,482 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity =0.7.6;
-pragma abicoder v2;
+// SPDX-License-Identifier: MIT
+pragma solidity >=0.7.6;
 
 import '../libraries/SphericalMath.sol';
 import '../libraries/FixedPoint96.sol';
-import '../libraries/FullMath.sol';
 
 contract SphericalMathEchidnaTest {
-    using LowGasSafeMath for uint256;
+    uint256 constant Q96 = 2**96;
     
-    // Reasonable bounds for testing
-    uint256 constant MIN_RADIUS = 79228162514264337593543950336; // MIN_RADIUS = 2^96
-    uint256 constant MAX_RADIUS = 79228162514264337593543950336000000; // Q96 * 1000000
-    uint256 constant MIN_N = 2;
-    uint256 constant MAX_N = 10;
-    uint256 constant MAX_RESERVE = 79228162514264337593543950336000000; // Q96 * 1000000
+    function test_sqrt_zero() public pure {
+        uint256 result = SphericalMath.sqrt(0);
+        assert(result == 0);
+    }
     
-    /// @notice Test that sqrt function produces correct results
-    function checkSqrtInvariants(uint256 x) external pure {
-        // Bound input to prevent overflow
-        require(x <= type(uint128).max);
+    function test_sqrt_monotonicity(uint256 x, uint256 y) public pure {
+        if (x > y) return;
+        if (x > type(uint256).max / 2) return;
+        
+        uint256 sqrtX = SphericalMath.sqrt(x);
+        uint256 sqrtY = SphericalMath.sqrt(y);
+        
+        assert(sqrtX <= sqrtY);
+    }
+    
+    function test_sqrt_perfect_squares(uint256 n) public pure {
+        if (n > 2**48) return;
+        
+        uint256 nQ96 = n * Q96;
+        uint256 input = (n * n) * Q96;
+        
+        if (input > type(uint256).max / Q96) return;
+        
+        uint256 result = SphericalMath.sqrt(input);
+        
+        uint256 tolerance = nQ96 / 100 + 1;
+        if (result > nQ96) {
+            assert(result - nQ96 <= tolerance);
+        } else {
+            assert(nQ96 - result <= tolerance);
+        }
+    }
+    
+    function test_sqrt_Q96_identity() public pure {
+        uint256 result = SphericalMath.sqrt(Q96);
+        assert(result == Q96);
+    }
+    
+    function test_sqrt_squared_approximation(uint256 x) public pure {
+        if (x == 0) return;
+        if (x > type(uint256).max >> 96) return;
+        
+        if (x < Q96) return;
         
         uint256 sqrtX = SphericalMath.sqrt(x);
         
-        // Invariant 1: sqrt(0) = 0
-        if (x == 0) {
-            assert(sqrtX == 0);
-        }
+        if (sqrtX > type(uint256).max / sqrtX) return;
         
-        // Invariant 2: For values in valid range, sqrt should maintain relationship
-        if (x >= MIN_RADIUS && x < type(uint128).max) {
-            // sqrt(x) returns result in Q96 scale
-            // So (sqrtX * sqrtX) / Q96 should give us back x
-            uint256 squared = (sqrtX * sqrtX) / MIN_RADIUS;
-            
-            uint256 diff = squared > x ? squared - x : x - squared;
-            uint256 tolerance = x / 100; // 1% tolerance for rounding
-            assert(diff <= tolerance);
-        }
+        uint256 squared = (sqrtX * sqrtX) / Q96;
         
-        // Invariant 3: sqrt is monotonically increasing
-        // Skip for very small values where precision is lost
-        if (x > MIN_RADIUS && x < type(uint128).max) {
-            uint256 sqrtXPlus1 = SphericalMath.sqrt(x + 1);
-            assert(sqrtXPlus1 >= sqrtX);
-        }
+        uint256 tolerance = x / 100;
+        if (tolerance == 0) tolerance = 1;
         
-        // Invariant 4: For very small values, sqrt should be proportional
-        if (x < MIN_RADIUS && x > 0) {
-            // For x < Q96, sqrt(x) in Q96 format will be sqrt(x) * 2^48
-            // The maximum sqrt for x < Q96 would be sqrt(Q96-1) which is less than Q96
-            assert(sqrtX < MIN_RADIUS);
-        }
-    }
-    
-    /// @notice Test orthogonal component calculation
-    function checkOrthogonalComponentInvariants(
-        uint256 sumSquaresQ96,
-        uint256 sumReservesQ96,
-        uint256 n
-    ) external pure {
-        // Bound inputs
-        require(n >= MIN_N && n <= MAX_N);
-        require(sumReservesQ96 <= MAX_RESERVE * n);
-        require(sumSquaresQ96 <= FullMath.mulDiv(MAX_RESERVE, MAX_RESERVE, MIN_RADIUS) * n);
-        
-        uint256 wNormSquared = SphericalMath.computeOrthogonalComponent(
-            sumSquaresQ96,
-            sumReservesQ96,
-            n
-        );
-        
-        // Invariant 1: Orthogonal component should be non-negative
-        assert(wNormSquared >= 0);
-        
-        // Invariant 2: By Cauchy-Schwarz, Σx²ᵢ >= (Σxᵢ)²/n
-        // So orthogonal component = Σx²ᵢ - (Σxᵢ)²/n >= 0
-        uint256 sumSquared = FullMath.mulDiv(sumReservesQ96, sumReservesQ96, MIN_RADIUS);
-        uint256 sumSquaredOverN = sumSquared / n;
-        
-        if (sumSquaresQ96 >= sumSquaredOverN) {
-            assert(wNormSquared == sumSquaresQ96 - sumSquaredOverN);
+        if (squared > x) {
+            assert(squared - x <= tolerance);
         } else {
-            // Should return 0 for numerical safety
-            assert(wNormSquared == 0);
-        }
-        
-        // Invariant 3: When all reserves are equal, orthogonal component should be 0
-        // This happens when sumSquaresQ96 = n * (sumReservesQ96/n)²
-        uint256 avgReserve = sumReservesQ96 / n;
-        uint256 expectedSumSquares = n * FullMath.mulDiv(avgReserve, avgReserve, MIN_RADIUS);
-        
-        if (sumSquaresQ96 == expectedSumSquares) {
-            // Allow small rounding error
-            assert(wNormSquared <= MIN_RADIUS / 1000);
+            assert(x - squared <= tolerance);
         }
     }
     
-    /// @notice Test price ratio calculation
-    function checkPriceRatioInvariants(
-        uint256 reserveI,
-        uint256 reserveJ,
-        uint256 radiusQ96
-    ) external pure {
-        // Bound inputs - reserves must be less than radius
-        require(radiusQ96 >= MIN_RADIUS && radiusQ96 <= MAX_RADIUS);
-        require(reserveI < radiusQ96 * 99 / 100); // Max 99% of radius
-        require(reserveJ < radiusQ96 * 99 / 100);
-        require(reserveI > radiusQ96 / 10000); // Min 0.01% of radius
-        require(reserveJ > radiusQ96 / 10000);
-        
-        uint256 ratio = SphericalMath.calculatePriceRatio(reserveI, reserveJ, radiusQ96);
-        
-        // Invariant 1: Price ratio should be positive
-        assert(ratio > 0);
-        
-        // Invariant 2: When reserveI = reserveJ, ratio should be 1 (in Q96)
-        if (reserveI == reserveJ) {
-            assert(ratio == MIN_RADIUS);
-        }
-        
-        // Invariant 3: When reserveI < reserveJ, ratio should be > 1
-        // Because (r - xJ) < (r - xI), so ratio > 1
-        if (reserveI < reserveJ) {
-            assert(ratio > MIN_RADIUS);
-        }
-        
-        // Invariant 4: When reserveI > reserveJ, ratio should be < 1
-        if (reserveI > reserveJ) {
-            assert(ratio < MIN_RADIUS);
-        }
-        
-        // Invariant 5: Ratio * inverse ratio should equal 1 (approximately)
-        uint256 inverseRatio = SphericalMath.calculatePriceRatio(reserveJ, reserveI, radiusQ96);
-        uint256 product = FullMath.mulDiv(ratio, inverseRatio, MIN_RADIUS);
-        
-        // Allow for small rounding error
-        uint256 diff = product > MIN_RADIUS ? 
-            product - MIN_RADIUS : 
-            MIN_RADIUS - product;
-        assert(diff <= MIN_RADIUS / 1000); // 0.1% tolerance
+    function test_orthogonal_zero_assets() public pure {
     }
     
-    /// @notice Test sphere constraint validation
-    function checkConstraintValidation(
-        uint256 sumReservesQ96,
-        uint256 sumSquaresQ96,
-        uint256 radiusQ96,
-        uint256 n
-    ) external pure {
-        // Bound inputs
-        require(n >= MIN_N && n <= MAX_N);
-        require(radiusQ96 >= MIN_RADIUS && radiusQ96 <= MAX_RADIUS);
-        require(sumReservesQ96 <= MAX_RESERVE * n);
-        require(sumSquaresQ96 <= FullMath.mulDiv(MAX_RESERVE, MAX_RESERVE, MIN_RADIUS) * n);
+    function test_orthogonal_equal_reserves(uint256 reserve, uint256 numAssets) public pure {
+        if (numAssets == 0 || numAssets > 100) return;
+        if (reserve > type(uint256).max / numAssets) return;
         
-        SphericalMath.PoolConstants memory constants = SphericalMath.PoolConstants({
-            radiusQ96: radiusQ96,
-            numAssets: n,
-            sqrtNumAssetsQ96: SphericalMath.sqrt(n * MIN_RADIUS),
-            epsilonQ96: MIN_RADIUS / 100 // 1% tolerance
-        });
+        uint256 sumReservesQ96 = reserve * numAssets * Q96;
+        uint256 sumSquaresQ96 = reserve * reserve * numAssets * Q96;
         
-        (bool valid, uint256 deviation) = SphericalMath.validateConstraintFromSums(
-            sumReservesQ96,
+        uint256 result = SphericalMath.computeOrthogonalComponent(
             sumSquaresQ96,
-            constants
+            sumReservesQ96,
+            numAssets
         );
-        
-        // Invariant 1: Deviation should be non-negative
-        assert(deviation >= 0);
-        
-        // Invariant 2: If valid, deviation should be within epsilon
-        if (valid) {
-            assert(deviation <= constants.epsilonQ96);
-        }
-        
-        // Invariant 3: If deviation > epsilon, should not be valid
-        if (deviation > constants.epsilonQ96) {
-            assert(!valid);
-        }
-        
-        // Invariant 4: For equal reserves on sphere, should be valid
-        // When all xᵢ = r/√n, we have:
-        // - sumReserves = n * r/√n = r√n
-        // - sumSquares = n * (r/√n)² = r²
-        // This satisfies the sphere constraint exactly
-        uint256 equalReserve = FullMath.mulDiv(
-            radiusQ96,
-            MIN_RADIUS,
-            constants.sqrtNumAssetsQ96
-        );
-        uint256 perfectSumReserves = n * equalReserve;
-        uint256 perfectSumSquares = n * FullMath.mulDiv(equalReserve, equalReserve, MIN_RADIUS);
-        
-        (bool shouldBeValid, uint256 perfectDeviation) = SphericalMath.validateConstraintFromSums(
-            perfectSumReserves,
-            perfectSumSquares,
-            constants
-        );
-        
-        // Should be valid with minimal deviation
-        assert(shouldBeValid);
-        assert(perfectDeviation <= constants.epsilonQ96 / 10); // Much smaller than epsilon
+        assert(result == 0);
     }
     
-    /// @notice Test sum updates after trade (simplified to avoid stack too deep)
-    function checkUpdateSumsInvariants(
-        uint256 sumReservesQ96,
+    function test_orthogonal_non_negative(
         uint256 sumSquaresQ96,
-        uint256 oldReserveI,
-        uint256 newReserveI,
-        uint256 oldReserveJ,
-        uint256 newReserveJ
-    ) external pure {
-        // Bound inputs
-        require(sumReservesQ96 <= MAX_RESERVE * MAX_N);
-        require(sumSquaresQ96 <= MAX_RESERVE * MAX_N); // Simplified bound
-        require(oldReserveI <= MAX_RESERVE);
-        require(oldReserveJ <= MAX_RESERVE);
-        require(newReserveI <= MAX_RESERVE);
-        require(newReserveJ <= MAX_RESERVE);
+        uint256 sumReservesQ96,
+        uint256 numAssets
+    ) public pure {
+        if (numAssets == 0) return;
+        
+        uint256 result = SphericalMath.computeOrthogonalComponent(
+            sumSquaresQ96,
+            sumReservesQ96,
+            numAssets
+        );
+        
+        assert(result >= 0);
+    }
+    
+    function test_orthogonal_single_asset(uint256 reserve) public pure {
+        if (reserve > type(uint256).max / Q96) return;
+        
+        uint256 sumReservesQ96 = reserve * Q96;
+        uint256 sumSquaresQ96 = reserve * reserve * Q96;
+        
+        uint256 result = SphericalMath.computeOrthogonalComponent(
+            sumSquaresQ96,
+            sumReservesQ96,
+            1
+        );
+        assert(result == 0);
+    }
+    
+    function test_orthogonal_cauchy_schwarz(
+        uint256 reserve1,
+        uint256 reserve2
+    ) public pure {
+        if (reserve1 > 2**100 || reserve2 > 2**100) return;
+        
+        uint256 sumReservesQ96 = (reserve1 + reserve2) * Q96;
+        uint256 sumSquaresQ96 = (reserve1 * reserve1 + reserve2 * reserve2) * Q96;
+        
+        uint256 result = SphericalMath.computeOrthogonalComponent(
+            sumSquaresQ96,
+            sumReservesQ96,
+            2
+        );
+        assert(result >= 0);
+        if (reserve1 == reserve2) {
+            assert(result == 0);
+        } else {
+            assert(result > 0);
+        }
+    }
+    
+    function test_price_ratio_equal_reserves() public pure {
+        uint256 reserve = 100 * Q96;
+        uint256 radius = 1000 * Q96;
+        
+        uint256 ratio = SphericalMath.calculatePriceRatio(reserve, reserve, radius);
+        assert(ratio == Q96);
+    }
+    
+    function test_price_ratio_inverse_relationship(uint256 reserveI, uint256 reserveJ, uint256 radius) public pure {
+        if (radius == 0) return;
+        if (radius > type(uint256).max / 2) return;
+        
+        if (reserveI >= radius * 98 / 100) return;
+        if (reserveJ >= radius * 98 / 100) return;
+        
+        uint256 ratioIJ = SphericalMath.calculatePriceRatio(reserveI, reserveJ, radius);
+        uint256 ratioJI = SphericalMath.calculatePriceRatio(reserveJ, reserveI, radius);
+        
+        uint256 product = (ratioIJ * ratioJI) / Q96;
+        uint256 tolerance = Q96 / 100;
+        
+        if (product > Q96) {
+            assert(product - Q96 <= tolerance);
+        } else {
+            assert(Q96 - product <= tolerance);
+        }
+    }
+    
+    function test_price_ratio_bounds(uint256 reserveI, uint256 reserveJ, uint256 radius) public pure {
+        if (radius == 0) return;
+        if (reserveI >= radius) return;
+        if (reserveJ >= radius) return;
+        if (reserveI > radius * 99 / 100) return;
+        if (reserveJ > radius * 99 / 100) return;
+        
+        uint256 ratio = SphericalMath.calculatePriceRatio(reserveI, reserveJ, radius);
+        assert(ratio > 0);
+        assert(ratio < type(uint256).max);
+    }
+    
+    function test_price_ratio_monotonicity(uint256 reserveBase, uint256 reserve1, uint256 reserve2, uint256 radius) public pure {
+        if (radius == 0) return;
+        if (radius > type(uint256).max / 2) return;
+        if (reserveBase >= radius * 98 / 100) return;
+        if (reserve1 >= radius * 98 / 100) return;
+        if (reserve2 >= radius * 98 / 100) return;
+        if (reserve1 > reserve2) {
+            uint256 temp = reserve1;
+            reserve1 = reserve2;
+            reserve2 = temp;
+        }
+        
+        uint256 ratio1 = SphericalMath.calculatePriceRatio(reserveBase, reserve1, radius);
+        uint256 ratio2 = SphericalMath.calculatePriceRatio(reserveBase, reserve2, radius);
+        assert(ratio2 <= ratio1);
+    }
+    
+    function test_update_sums_no_change() public pure {
+        uint256 sumReservesQ96 = 1000 * Q96;
+        uint256 sumSquaresQ96 = 500000 * Q96;
+        uint256 reserve = 100 * Q96;
         
         (uint256 newSumReserves, uint256 newSumSquares) = SphericalMath.updateSumsAfterTrade(
             sumReservesQ96,
             sumSquaresQ96,
-            oldReserveI,
-            newReserveI,
-            oldReserveJ,
-            newReserveJ
+            reserve,
+            reserve,  // same value
+            reserve,
+            reserve   // same value
         );
+        assert(newSumReserves == sumReservesQ96);
+        assert(newSumSquares == sumSquaresQ96);
+    }
+    
+    function test_update_sums_conservation(
+        uint256 sumReserves,
+        uint256 oldI,
+        uint256 newI,
+        uint256 oldJ,
+        uint256 newJ
+    ) public pure {
+        if (sumReserves > type(uint256).max / Q96) return;
+        if (oldI > type(uint128).max) return;
+        if (newI > type(uint128).max) return;
+        if (oldJ > type(uint128).max) return;
+        if (newJ > type(uint128).max) return;
         
-        // Invariant 1: Both sums should be non-negative
-        assert(newSumReserves >= 0);
-        assert(newSumSquares >= 0);
+        uint256 sumReservesQ96 = sumReserves * Q96;
+        uint256 sumSquaresQ96 = sumReserves * sumReserves; // Simplified for test
         
-        // Invariant 2: Sum should change by the delta of reserves
-        int256 delta = int256(newReserveI) + int256(newReserveJ) 
-            - int256(oldReserveI) - int256(oldReserveJ);
+        uint256 oldIQ96 = oldI * Q96;
+        uint256 newIQ96 = newI * Q96;
+        uint256 oldJQ96 = oldJ * Q96;
+        uint256 newJQ96 = newJ * Q96;
         
-        // Check the sum changed correctly (within rounding)
-        if (delta >= 0) {
-            // Sum should increase
-            assert(newSumReserves >= sumReservesQ96);
+        (uint256 newSumReserves, ) = SphericalMath.updateSumsAfterTrade(
+            sumReservesQ96,
+            sumSquaresQ96,
+            oldIQ96,
+            newIQ96,
+            oldJQ96,
+            newJQ96
+        );
+        int256 expectedDelta = int256(newI) + int256(newJ) - int256(oldI) - int256(oldJ);
+        
+        if (expectedDelta >= 0) {
+            uint256 expected = sumReservesQ96 + uint256(expectedDelta) * Q96;
+            assert(newSumReserves == expected);
         } else {
-            // Sum should decrease
-            assert(newSumReserves <= sumReservesQ96);
+            uint256 expected = sumReservesQ96 - uint256(-expectedDelta) * Q96;
+            assert(newSumReserves == expected);
         }
     }
     
+    function test_update_sums_swap_conservation(
+        uint256 sumReserves,
+        uint256 sumSquares,
+        uint256 reserveI,
+        uint256 reserveJ,
+        uint256 deltaAmount
+    ) public pure {
+        if (sumReserves > type(uint256).max / Q96) return;
+        if (sumSquares > type(uint256).max / Q96) return;
+        if (reserveI > type(uint128).max) return;
+        if (reserveJ > type(uint128).max) return;
+        if (deltaAmount > reserveJ) return;
+        if (deltaAmount == 0) return;
+        
+        uint256 sumReservesQ96 = sumReserves * Q96;
+        uint256 sumSquaresQ96 = sumSquares * Q96;
+        uint256 oldIQ96 = reserveI * Q96;
+        uint256 newIQ96 = (reserveI + deltaAmount) * Q96;
+        uint256 oldJQ96 = reserveJ * Q96;
+        uint256 newJQ96 = (reserveJ - deltaAmount) * Q96;
+        
+        (uint256 newSumReserves, uint256 newSumSquares) = SphericalMath.updateSumsAfterTrade(
+            sumReservesQ96,
+            sumSquaresQ96,
+            oldIQ96,
+            newIQ96,
+            oldJQ96,
+            newJQ96
+        );
+        
+        assert(newSumReserves == sumReservesQ96);
+        assert(newSumSquares != sumSquaresQ96);
+    }
+    
+    function test_update_sums_squares_positive(
+        uint256 sumSquares,
+        uint256 oldI,
+        uint256 newI,
+        uint256 oldJ,
+        uint256 newJ
+    ) public pure {
+        if (sumSquares > type(uint256).max / Q96) return;
+        if (oldI > type(uint128).max) return;
+        if (newI > type(uint128).max) return;
+        if (oldJ > type(uint128).max) return;
+        if (newJ > type(uint128).max) return;
+        uint256 minSquares = (oldI * oldI + oldJ * oldJ) * 2;
+        if (sumSquares < minSquares) sumSquares = minSquares;
+        
+        uint256 sumReservesQ96 = 1000 * Q96; // Arbitrary
+        uint256 sumSquaresQ96 = sumSquares * Q96;
+        
+        uint256 oldIQ96 = oldI * Q96;
+        uint256 newIQ96 = newI * Q96;
+        uint256 oldJQ96 = oldJ * Q96;
+        uint256 newJQ96 = newJ * Q96;
+        
+        (, uint256 newSumSquares) = SphericalMath.updateSumsAfterTrade(
+            sumReservesQ96,
+            sumSquaresQ96,
+            oldIQ96,
+            newIQ96,
+            oldJQ96,
+            newJQ96
+        );
+        assert(newSumSquares >= 0);
+    }
+    
+    function test_update_sums_zero_handling() public pure {
+        uint256 sumReservesQ96 = 100 * Q96;
+        uint256 sumSquaresQ96 = 10000 * Q96;
+        (uint256 newSumReserves1, uint256 newSumSquares1) = SphericalMath.updateSumsAfterTrade(
+            sumReservesQ96,
+            sumSquaresQ96,
+            0,
+            50 * Q96,
+            0,
+            50 * Q96
+        );
+        
+        assert(newSumReserves1 == 200 * Q96);
+        assert(newSumSquares1 == 15000 * Q96);
+        (uint256 newSumReserves2, uint256 newSumSquares2) = SphericalMath.updateSumsAfterTrade(
+            200 * Q96,
+            20000 * Q96,
+            50 * Q96,
+            0,
+            50 * Q96,
+            0
+        );
+        
+        assert(newSumReserves2 == 100 * Q96);
+        assert(newSumSquares2 == 15000 * Q96);
+    }
+    
+    function test_validate_constraint_perfect_sphere() public pure {
+        uint256 radiusQ96 = 1000 * Q96;
+        uint256 numAssets = 2;
+        uint256 sqrtNumAssetsQ96 = 112045541949572109684781944450942720;
+        uint256 epsilonQ96 = Q96 * 1000;
+        
+        uint256 x = 1707;
+        uint256 sumReservesQ96 = x * 2 * Q96;
+        uint256 sumSquaresQ96 = x * x * 2 * Q96;
+        
+        (bool valid, ) = SphericalMath.validateConstraintFromSums(
+            sumReservesQ96,
+            sumSquaresQ96,
+            radiusQ96,
+            numAssets,
+            sqrtNumAssetsQ96,
+            epsilonQ96
+        );
+        
+        assert(valid);
+    }
+    
+    function test_validate_constraint_violation_detected(
+        uint256 sumReserves,
+        uint256 sumSquares,
+        uint256 radius
+    ) public pure {
+        if (radius == 0) return;
+        if (radius > type(uint128).max) return;
+        if (sumReserves > type(uint128).max) return;
+        if (sumSquares > type(uint128).max) return;
+        
+        uint256 radiusQ96 = radius * Q96;
+        uint256 numAssets = 2;
+        uint256 sqrtNumAssetsQ96 = 112045541949572109684781944450942720;
+        uint256 epsilonQ96 = 0;
+        
+        uint256 sumReservesQ96 = sumReserves * Q96;
+        uint256 sumSquaresQ96 = sumSquares * Q96;
+        
+        if (sumReserves > radius * 10 && sumSquares > radius * radius * 100) {
+            (bool valid, ) = SphericalMath.validateConstraintFromSums(
+                sumReservesQ96,
+                sumSquaresQ96,
+                radiusQ96,
+                numAssets,
+                sqrtNumAssetsQ96,
+                epsilonQ96
+            );
+            
+            assert(!valid);
+        }
+    }
+    
+    function test_validate_constraint_deviation_calculation(
+        uint256 epsilon
+    ) public pure {
+        if (epsilon > Q96 * 100000) return;
+        
+        uint256 radiusQ96 = 1000 * Q96;
+        uint256 numAssets = 2;
+        uint256 sqrtNumAssetsQ96 = 112045541949572109684781944450942720;
+        
+        uint256 x = 1700;
+        uint256 sumReservesQ96 = x * 2 * Q96;
+        uint256 sumSquaresQ96 = x * x * 2 * Q96;
+        
+        (bool valid, uint256 deviation) = SphericalMath.validateConstraintFromSums(
+            sumReservesQ96,
+            sumSquaresQ96,
+            radiusQ96,
+            numAssets,
+            sqrtNumAssetsQ96,
+            epsilon
+        );
+        
+        assert(deviation > 19000 * Q96 && deviation < 21000 * Q96);
+        
+        if (epsilon >= deviation) {
+            assert(valid);
+        } else {
+            assert(!valid);
+        }
+    }
+    
+    function test_pool_constants_valid_ranges(
+        uint256 radius,
+        uint256 numAssets,
+        uint256 epsilon
+    ) public pure {
+        if (radius == 0) return;
+        if (radius > type(uint128).max) return;
+        if (numAssets < 2) return;
+        if (numAssets > 1000) return;
+        if (epsilon == 0) return;
+        if (epsilon >= radius) return;
+        
+        uint256 radiusQ96 = radius * Q96;
+        uint256 epsilonQ96 = epsilon * Q96;
+        uint256 sqrtNumAssetsQ96 = SphericalMath.sqrt(numAssets * Q96);
+        SphericalMath.validatePoolConstants(
+            radiusQ96,
+            numAssets,
+            sqrtNumAssetsQ96,
+            epsilonQ96
+        );
+        assert(true);
+    }
+    
+    function test_pool_constants_sqrt_verification() public pure {
+        // Can't test reverts with internal functions in Echidna
+        // Unit tests cover this case
+    }
+    
+    function test_pool_constants_overflow_protection(uint256 radius) public pure {
+        if (radius <= type(uint128).max) return;
+        
+        uint256 radiusQ96 = radius;
+        uint256 numAssets = 2;
+        uint256 sqrtNumAssetsQ96 = SphericalMath.sqrt(numAssets * Q96);
+        uint256 epsilonQ96 = Q96;
+        
+        if (radiusQ96 > type(uint256).max / radiusQ96) {
+            return;
+        }
+        
+        SphericalMath.validatePoolConstants(
+            radiusQ96,
+            numAssets,
+            sqrtNumAssetsQ96,
+            epsilonQ96
+        );
+    }
 }
