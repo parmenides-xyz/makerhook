@@ -1,27 +1,17 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity >=0.5.0;
 
-import './FullMath.sol';
 import './FixedPoint96.sol';
+import './FullMath.sol';
 import './SphericalMath.sol';
 
-/// @title Tick math for spherical AMM
-/// @notice Converts between tick indices and plane constants for n-dimensional sphere AMM
-/// @dev Ticks represent nested spherical caps defined by planes x̄ · v̄ = k
-/// @dev Optimized for stablecoin pools with fixed tick spacing of 1 for maximum precision
+/// @title Spherical tick mathematics for computing virtual reserves
+/// @notice Computes virtual reserves and orthogonal radius for tick-based liquidity
 library SphericalTickMath {
-    // Fixed tick spacing for stablecoin pools
-    // Using 1 for maximum precision since all assets are stable
+    // Constants
     int24 internal constant TICK_SPACING = 1;
-    
-    // Maximum tick value - provides 0.01% precision for LP positioning
     int24 internal constant MAX_TICK = 10000;
     
-    /// @notice Get the minimum plane constant (equal price point)
-    /// @dev k_min = r(√n - 1)
-    /// @param radiusQ96 The sphere radius in Q96
-    /// @param sqrtNQ96 Square root of number of assets in Q96
-    /// @return kMinQ96 Minimum plane constant in Q96
     function getKMin(
         uint256 radiusQ96,
         uint256 sqrtNQ96
@@ -36,12 +26,6 @@ library SphericalTickMath {
         );
     }
     
-    /// @notice Get the maximum plane constant (maximum imbalance)
-    /// @dev k_max = r(n-1)/√n
-    /// @param radiusQ96 The sphere radius in Q96
-    /// @param n Number of assets (raw number, not Q96)
-    /// @param sqrtNQ96 Square root of number of assets in Q96
-    /// @return kMaxQ96 Maximum plane constant in Q96
     function getKMax(
         uint256 radiusQ96,
         uint256 n,
@@ -59,13 +43,6 @@ library SphericalTickMath {
         );
     }
     
-    /// @notice Convert tick to plane constant k
-    /// @dev Linear mapping from tick to k-range
-    /// @param tick The tick index
-    /// @param radiusQ96 The sphere radius in Q96
-    /// @param n Number of assets
-    /// @param sqrtNQ96 Square root of n in Q96
-    /// @return kQ96 The plane constant k in Q96
     function tickToPlaneConstant(
         int24 tick,
         uint256 radiusQ96,
@@ -78,7 +55,7 @@ library SphericalTickMath {
         require(tick >= 0 && tick <= MAX_TICK, "Tick out of range");
         
         if (tick == 0) {
-            return kMinQ96; // Equal price point
+            return kMinQ96;
         }
         
         // Linear interpolation from 0 to MAX_TICK
@@ -93,13 +70,6 @@ library SphericalTickMath {
         kQ96 = kMinQ96 + FullMath.mulDiv(kRange, progress, FixedPoint96.Q96);
     }
     
-    /// @notice Get tick from plane constant
-    /// @dev Inverse of tickToPlaneConstant
-    /// @param kQ96 The plane constant in Q96
-    /// @param radiusQ96 The sphere radius in Q96
-    /// @param n Number of assets
-    /// @param sqrtNQ96 Square root of n in Q96
-    /// @return tick The tick index
     function planeConstantToTick(
         uint256 kQ96,
         uint256 radiusQ96,
@@ -124,12 +94,6 @@ library SphericalTickMath {
         tick = int24(int256(FullMath.mulDiv(progress, uint256(int256(MAX_TICK)), FixedPoint96.Q96)));
     }
     
-    /// @notice Calculate reduced radius in orthogonal subspace
-    /// @dev s = √(r² - (k - r√n)²)
-    /// @param kQ96 The plane constant in Q96
-    /// @param radiusQ96 The sphere radius in Q96
-    /// @param sqrtNQ96 Square root of n in Q96
-    /// @return sQ96 The reduced radius in orthogonal subspace
     function getOrthogonalRadius(
         uint256 kQ96,
         uint256 radiusQ96,
@@ -152,24 +116,13 @@ library SphericalTickMath {
         // Calculate r²
         uint256 rSquared = FullMath.mulDiv(radiusQ96, radiusQ96, FixedPoint96.Q96);
         
-        // Ensure we don't underflow
+        // Calculate s² = r² - (k - r√n)²
         require(rSquared >= diffSquared, "Invalid k for radius");
-        
-        // Calculate r² - (k - r√n)²
         uint256 sSquared = rSquared - diffSquared;
         
-        // Take square root
-        sQ96 = SphericalMath.sqrt(sSquared);
+        return SphericalMath.sqrt(sSquared);
     }
     
-    /// @notice Calculate virtual reserves at tick boundary
-    /// @dev From paper: x_min = (k√n - √(k²n - n((n-1)r - k√n)²))/n
-    /// @param kQ96 The plane constant in Q96
-    /// @param radiusQ96 The sphere radius in Q96
-    /// @param n Number of assets
-    /// @param sqrtNQ96 Square root of n in Q96
-    /// @return xMinQ96 Minimum virtual reserve in Q96
-    /// @return xMaxQ96 Maximum virtual reserve in Q96
     function getVirtualReserves(
         uint256 kQ96,
         uint256 radiusQ96,
@@ -180,11 +133,7 @@ library SphericalTickMath {
         uint256 kSqrtN = FullMath.mulDiv(kQ96, sqrtNQ96, FixedPoint96.Q96);
         
         // Calculate (n-1)r
-        uint256 nMinus1R = FullMath.mulDiv(
-            (n - 1) * FixedPoint96.Q96,
-            radiusQ96,
-            FixedPoint96.Q96
-        );
+        uint256 nMinus1R = (n - 1) * radiusQ96;
         
         // Calculate |(n-1)r - k√n|
         uint256 innerTerm;
@@ -195,28 +144,16 @@ library SphericalTickMath {
         }
         
         // Calculate ((n-1)r - k√n)²
-        uint256 innerTermSquared = FullMath.mulDiv(
-            innerTerm,
-            innerTerm,
-            FixedPoint96.Q96
-        );
+        uint256 innerTermSquared = FullMath.mulDiv(innerTerm, innerTerm, FixedPoint96.Q96);
         
         // Calculate k²
         uint256 kSquared = FullMath.mulDiv(kQ96, kQ96, FixedPoint96.Q96);
         
         // Calculate k²n
-        uint256 kSquaredN = FullMath.mulDiv(
-            kSquared,
-            n * FixedPoint96.Q96,
-            FixedPoint96.Q96
-        );
+        uint256 kSquaredN = kSquared * n;
         
         // Calculate n((n-1)r - k√n)²
-        uint256 nInnerTermSquared = FullMath.mulDiv(
-            n * FixedPoint96.Q96,
-            innerTermSquared,
-            FixedPoint96.Q96
-        );
+        uint256 nInnerTermSquared = n * innerTermSquared;
         
         // Calculate discriminant: k²n - n((n-1)r - k√n)²
         require(kSquaredN >= nInnerTermSquared, "Invalid tick parameters");
@@ -234,12 +171,6 @@ library SphericalTickMath {
         xMaxQ96 = xMaxCandidate > radiusQ96 ? radiusQ96 : xMaxCandidate;
     }
     
-    /// @notice Check if reserves satisfy tick plane constraint
-    /// @dev Verifies that x̄ · v̄ = k
-    /// @param reserves Array of reserve amounts in Q96
-    /// @param kQ96 The plane constant in Q96
-    /// @param sqrtNQ96 Square root of n in Q96
-    /// @return isValid True if reserves lie on the tick plane
     function isOnTickPlane(
         uint256[] memory reserves,
         uint256 kQ96,
