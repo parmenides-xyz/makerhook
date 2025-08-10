@@ -1,15 +1,17 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
 
 import '../libraries/SphericalTickMath.sol';
+import '../libraries/FixedPoint96.sol';
 
 contract SphericalTickMathTest {
-    // Expose all internal functions for testing
+    int24 public constant MAX_TICK = 10000;
+    int24 public constant TICK_SPACING = 1;
     
     function getKMin(
         uint256 radiusQ96,
         uint256 sqrtNQ96
-    ) external pure returns (uint256 kMinQ96) {
+    ) external pure returns (uint256) {
         return SphericalTickMath.getKMin(radiusQ96, sqrtNQ96);
     }
     
@@ -17,7 +19,7 @@ contract SphericalTickMathTest {
         uint256 radiusQ96,
         uint256 n,
         uint256 sqrtNQ96
-    ) external pure returns (uint256 kMaxQ96) {
+    ) external pure returns (uint256) {
         return SphericalTickMath.getKMax(radiusQ96, n, sqrtNQ96);
     }
     
@@ -26,17 +28,8 @@ contract SphericalTickMathTest {
         uint256 radiusQ96,
         uint256 n,
         uint256 sqrtNQ96
-    ) external pure returns (uint256 kQ96) {
+    ) external pure returns (uint256) {
         return SphericalTickMath.tickToPlaneConstant(tick, radiusQ96, n, sqrtNQ96);
-    }
-    
-    function planeConstantToTick(
-        uint256 kQ96,
-        uint256 radiusQ96,
-        uint256 n,
-        uint256 sqrtNQ96
-    ) external pure returns (int24 tick) {
-        return SphericalTickMath.planeConstantToTick(kQ96, radiusQ96, n, sqrtNQ96);
     }
     
     function getOrthogonalRadius(
@@ -56,20 +49,20 @@ contract SphericalTickMathTest {
         return SphericalTickMath.getVirtualReserves(kQ96, radiusQ96, n, sqrtNQ96);
     }
     
+    function planeConstantToTick(
+        uint256 kQ96,
+        uint256 radiusQ96,
+        uint256 n,
+        uint256 sqrtNQ96
+    ) external pure returns (int24) {
+        return SphericalTickMath.planeConstantToTick(kQ96, radiusQ96, n, sqrtNQ96);
+    }
+    
     function isOnTickPlane(
         uint256[] memory reserves,
         uint256 kQ96,
         uint256 sqrtNQ96
-    ) external pure returns (bool isValid) {
+    ) external pure returns (bool) {
         return SphericalTickMath.isOnTickPlane(reserves, kQ96, sqrtNQ96);
-    }
-    
-    // Helper to expose constants
-    function MAX_TICK() external pure returns (int24) {
-        return SphericalTickMath.MAX_TICK;
-    }
-    
-    function TICK_SPACING() external pure returns (int24) {
-        return SphericalTickMath.TICK_SPACING;
     }
 }
