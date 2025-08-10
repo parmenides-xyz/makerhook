@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.7.6;
 
-import '../libraries/SphericalMathNew.sol';
+import '../libraries/SphericalMath.sol';
 import '../libraries/FixedPoint96.sol';
 
 contract SphericalMathTest {
     function sqrt(uint256 x) external pure returns (uint256) {
-        return SphericalMathNew.sqrt(x);
+        return SphericalMath.sqrt(x);
     }
     
     function computeOrthogonalComponent(
@@ -14,7 +14,7 @@ contract SphericalMathTest {
         uint256 sumReservesQ96,
         uint256 numAssets
     ) external pure returns (uint256) {
-        return SphericalMathNew.computeOrthogonalComponent(sumSquaresQ96, sumReservesQ96, numAssets);
+        return SphericalMath.computeOrthogonalComponent(sumSquaresQ96, sumReservesQ96, numAssets);
     }
     
     function calculatePriceRatio(
@@ -22,7 +22,7 @@ contract SphericalMathTest {
         uint256 reserveJ,
         uint256 radiusQ96
     ) external pure returns (uint256) {
-        return SphericalMathNew.calculatePriceRatio(reserveI, reserveJ, radiusQ96);
+        return SphericalMath.calculatePriceRatio(reserveI, reserveJ, radiusQ96);
     }
     
     function updateSumsAfterTrade(
@@ -33,7 +33,7 @@ contract SphericalMathTest {
         uint256 oldReserveJ,
         uint256 newReserveJ
     ) external pure returns (uint256 newSumReserves, uint256 newSumSquares) {
-        return SphericalMathNew.updateSumsAfterTrade(
+        return SphericalMath.updateSumsAfterTrade(
             sumReservesQ96,
             sumSquaresQ96,
             oldReserveI,
@@ -51,7 +51,7 @@ contract SphericalMathTest {
         uint256 sqrtNumAssetsQ96,
         uint256 epsilonQ96
     ) external pure returns (bool valid, uint256 deviationQ96) {
-        return SphericalMathNew.validateConstraintFromSums(
+        return SphericalMath.validateConstraintFromSums(
             sumReservesQ96,
             sumSquaresQ96,
             radiusQ96,
@@ -67,7 +67,7 @@ contract SphericalMathTest {
         uint256 sqrtNumAssetsQ96,
         uint256 epsilonQ96
     ) external pure {
-        SphericalMathNew.validatePoolConstants(
+        SphericalMath.validatePoolConstants(
             radiusQ96,
             numAssets,
             sqrtNumAssetsQ96,
