@@ -1,3 +1,3 @@
 # MakerHook
 
-Building n-dimensional zkAMM to unify stablecoin liquidity on Sei.
+Building n-dimensional zkAMM to unify stablecoin liquidity on Kaia.
